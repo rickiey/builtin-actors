@@ -4,8 +4,87 @@ on:
   push:
 
 jobs:
-  rustfmt:
+  #rustfmt:
+  #  runs-on: ubuntu-latest
+  #  steps:
+  #  - name: Checking out fvm
+  #    uses: actions/checkout@v2
+  #  - name: Installing Rust
+  #    uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1.0.7
+  #    with:
+  #      profile: minimal
+  #      override: true
+  #      components: rustfmt
+  #  - name: Running fmt
+  #    uses: actions-rs/cargo@844f36862e911db73fe0815f00a4a2602c279505 # v1.0.3
+  #    with:
+  #      command: fmt
+  #      args: -- --check
+  #cargo:
+  #  runs-on: ubuntu-latest
+  #  strategy:
+  #    matrix:
+  #      include:
+  #        - name: check-clippy
+  #          command: clippy
+  #          args: --all --all-targets
+  #          components: clippy
+  #        - name: test
+  #          command: test
+  #          args: --all
+  #        - name: build
+  #          command: build
+  #          push: true
+  #  env:
+  #    SCCACHE_CACHE_SIZE: 2G
+  #    SCCACHE_DIR: ${{ github.workspace }}/.cache/sccache
+  #    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #    CARGO_INCREMENTAL: 0
+  #    CACHE_SKIP_SAVE: ${{ matrix.push == '' || matrix.push == 'false' }}
+  #  name: ${{ matrix.name }}
+  #  steps:
+  #  - name: Checking out builtin-actors
+  #    uses: actions/checkout@v2
+  #    with:
+  #      submodules: ${{ matrix.submodules }}
+  #  - name: Installing Rust
+  #    uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1.0.7
+  #    with:
+  #      profile: minimal
+  #      target: wasm32-unknown-unknown
+  #      override: true
+  #      components: ${{ matrix.components }}
+  #  # we don't check the lockfile in; this is needed for cache restoration/saving
+  #  - name: Generating Cargo.lock
+  #    uses: actions-rs/cargo@844f36862e911db73fe0815f00a4a2602c279505 # v1.0.3
+  #    with:
+  #      command: generate-lockfile
+  #  - name: Setting up cache
+  #    uses: ./.github/actions/rust-sccache
+  #    with:
+  #      version: v0.2.15
+  #      # change this to invalidate sccache for this job
+  #      shared-key: v1
+  #  - name: Running ${{ matrix.command }}
+  #    uses: actions-rs/cargo@844f36862e911db73fe0815f00a4a2602c279505 # v1.0.3
+  #    with:
+  #      command: ${{ matrix.command }}
+  #      args: ${{ matrix.args }}
+  #  - name: Publishing build artifacts
+  #    if: ${{ matrix.command == 'build' }}
+  #    uses: actions/upload-artifact@v2
+  #    with:
+  #      name: bundle
+  #      path: |
+  #        target/**/bundle.car
+  coverage:
     runs-on: ubuntu-latest
+    env:
+      SCCACHE_CACHE_SIZE: 2G
+      SCCACHE_DIR: ${{ github.workspace }}/.cache/sccache
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CARGO_INCREMENTAL: 0
+      CACHE_SKIP_SAVE: true
     steps:
     - name: Checking out fvm
       uses: actions/checkout@v2
@@ -13,67 +92,57 @@ jobs:
       uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1.0.7
       with:
         profile: minimal
+        # If you change the nightly version, Make sure you update update the
+        # path below.
+        toolchain: nightly-2022-03-16
         override: true
-        components: rustfmt
-    - name: Running fmt
+        components: llvm-tools-preview
+    - name: Put LLVM tools into the PATH
+      run: echo "${HOME}/.rustup/toolchains/nightly-2022-03-16-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-unknown-linux-gnu/bin" >> $GITHUB_PATH
+    - name: Install demangler
       uses: actions-rs/cargo@844f36862e911db73fe0815f00a4a2602c279505 # v1.0.3
       with:
-        command: fmt
-        args: -- --check
-  cargo:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - name: check-clippy
-            command: clippy
-            args: --all --all-targets
-            components: clippy
-          - name: test
-            command: test
-            args: --all
-          - name: build
-            command: build
-            push: true
-    env:
-      SCCACHE_CACHE_SIZE: 2G
-      SCCACHE_DIR: ${{ github.workspace }}/.cache/sccache
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      CARGO_INCREMENTAL: 0
-      CACHE_SKIP_SAVE: ${{ matrix.push == '' || matrix.push == 'false' }}
-    name: ${{ matrix.name }}
-    steps:
-    - name: Checking out builtin-actors
-      uses: actions/checkout@v2
-      with:
-        submodules: ${{ matrix.submodules }}
-    - name: Installing Rust
-      uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1.0.7
-      with:
-        profile: minimal
-        target: wasm32-unknown-unknown
-        override: true
-        components: ${{ matrix.components }}
-    # we don't check the lockfile in; this is needed for cache restoration/saving
-    - name: Generating Cargo.lock
+        command: install
+        args: rustfilt
+    - name: Create coverage report
       uses: actions-rs/cargo@844f36862e911db73fe0815f00a4a2602c279505 # v1.0.3
+      env:
+        # Incremental build is not supported when profiling.
+        CARGO_INCREMENTAL: 0
+        # Make sure that each run of an executable creates a new profile file,
+        # with the default name they would override each other.
+        LLVM_PROFILE_FILE: "%m.profraw"
+        # -Cinstrument-coverage: enable llvm coverage instrumentation
+        # -Ccodegen-units=1: building in parallel is not supported when profiling
+        # -Copt-level=0: disable optimizations for more accurate coverage
+        # -Clink-dead-code: dead code should be considered as not covered code
+        # -Coverflow-checks=off: checking for overflow is not needed for coverage reporting
+        # -Cinline-threshold=0: do not inline
+        RUSTFLAGS: -Cinstrument-coverage -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code -Coverflow-checks=off -Cinline-threshold=0
       with:
-        command: generate-lockfile
-    - name: Setting up cache
-      uses: ./.github/actions/rust-sccache
+        command: test
+        args: --workspace --exclude fil_builtin_actors_bundle --exclude fil_actor_bundler
+    - name: Merge profiling data
+      # Do *not* use sparse output. It leads to more lines that are not taken
+      # into account at all
+      run: llvm-profdata merge --output=default.profdata ./*.profraw
+    - name: Create HTML coverage report
+      # The compiled files contain the coverage information. From running the
+      # tests we don't know what those files are called, hence use all files
+      # from the `./target/debug/deps` directory which don't have an extension.
+      run: |
+        OBJECT_OPTIONS=($(find ./target/debug/deps/* -name '*' -not -name '*\.*' -printf ' --object %p'))
+        # Create HTML report of this project, we don't care about coverage of
+        # dependencies
+        llvm-cov show --Xdemangler=rustfilt --show-expansions --show-line-counts-or-regions --ignore-filename-regex=".cargo|.rustup|/rustc|./tests/" --format=html --output-dir=./llvm-show --instr-profile=default.profdata ${OBJECT_OPTIONS[@]}
+        # Create file to be uploaded to codecov
+        llvm-cov export --ignore-filename-regex=".cargo|.rustup|/rustc|./tests" --format=lcov --instr-profile=default.profdata ${OBJECT_OPTIONS[@]} > lcov.info
+    - name: Archive code coverage results
+      uses: actions/upload-artifact@v3
       with:
-        version: v0.2.15
-        # change this to invalidate sccache for this job
-        shared-key: v1
-    - name: Running ${{ matrix.command }}
-      uses: actions-rs/cargo@844f36862e911db73fe0815f00a4a2602c279505 # v1.0.3
+        name: code-coverage-report
+        path: llvm-show/*
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@f32b3a3741e1053eb607407145bc9619351dc93b # v2.1.0
       with:
-        command: ${{ matrix.command }}
-        args: ${{ matrix.args }}
-    - name: Publishing build artifacts
-      if: ${{ matrix.command == 'build' }}
-      uses: actions/upload-artifact@v2
-      with:
-        name: bundle
-        path: |
-          target/**/bundle.car
+        files: lcov.info
