@@ -1,6 +1,7 @@
 use fil_actor_miner as miner;
 use fil_actors_runtime::test_utils::*;
 
+use fvm_ipld_bitfield::BitField;
 use fvm_shared::clock::ChainEpoch;
 use fvm_shared::crypto::randomness::DomainSeparationTag;
 use fvm_shared::econ::TokenAmount;
@@ -9,7 +10,6 @@ use fvm_shared::error::ExitCode;
 use fvm_shared::randomness::Randomness;
 use fvm_shared::sector::RegisteredPoStProof;
 use fvm_shared::sector::RegisteredSealProof;
-use fvm_ipld_bitfield::BitField;
 
 mod util;
 use util::*;
@@ -685,7 +685,7 @@ fn successful_recoveries_recover_power() {
     let initial_locked = h.get_locked_funds(&rt);
 
     // Submit first PoSt to ensure we are sufficiently early to add a fault
-	// advance to next proving period
+    // advance to next proving period
     h.advance_and_submit_posts(&mut rt, &infos);
 
     // advance deadline and declare fault
@@ -709,12 +709,9 @@ fn successful_recoveries_recover_power() {
     }
 
     // Now submit PoSt
-	// Power should return for recovered sector.
+    // Power should return for recovered sector.
     let cfg = PoStConfig::with_expected_power_delta(&pwr);
-    let partition = miner::PoStPartition {
-        index: pidx,
-        skipped: make_empty_bitfield(),
-    };
+    let partition = miner::PoStPartition { index: pidx, skipped: make_empty_bitfield() };
     h.submit_window_post(&mut rt, &dlinfo, vec![partition], infos.clone(), cfg);
 
     // faulty power has been removed, partition no longer has faults or recoveries

@@ -5,21 +5,15 @@ use fil_actor_market::{
     VerifyDealsForActivationParams, VerifyDealsForActivationReturn,
 };
 use fil_actor_miner::{
-    initial_pledge_for_power, new_deadline_info_from_offset_and_epoch, qa_power_for_weight, Actor,
-    ChangeMultiaddrsParams, ChangePeerIDParams, ConfirmSectorProofsParams, CronEventPayload,
-    Deadline, DeadlineInfo, Deadlines, DeferredCronEventParams, DisputeWindowedPoStParams,
-    GetControlAddressesReturn, Method, MinerConstructorParams as ConstructorParams, Partition,
-    PoStPartition, PowerPair, PreCommitSectorParams, ProveCommitSectorParams, SectorOnChainInfo,
-    SectorPreCommitOnChainInfo, State, SubmitWindowedPoStParams, VestingFunds, WindowedPoSt,
-    CRON_EVENT_PROVING_DEADLINE,
-    locked_reward_from_reward,
-    ApplyRewardParams,
-    Sectors,
-    power_for_sectors,
-    DeclareFaultsParams,
-    FaultDeclaration,
-    RecoveryDeclaration,
-    DeclareFaultsRecoveredParams,
+    initial_pledge_for_power, locked_reward_from_reward, new_deadline_info_from_offset_and_epoch,
+    power_for_sectors, qa_power_for_weight, Actor, ApplyRewardParams, ChangeMultiaddrsParams,
+    ChangePeerIDParams, ConfirmSectorProofsParams, CronEventPayload, Deadline, DeadlineInfo,
+    Deadlines, DeclareFaultsParams, DeclareFaultsRecoveredParams, DeferredCronEventParams,
+    DisputeWindowedPoStParams, FaultDeclaration, GetControlAddressesReturn, Method,
+    MinerConstructorParams as ConstructorParams, Partition, PoStPartition, PowerPair,
+    PreCommitSectorParams, ProveCommitSectorParams, RecoveryDeclaration, SectorOnChainInfo,
+    SectorPreCommitOnChainInfo, Sectors, State, SubmitWindowedPoStParams, VestingFunds,
+    WindowedPoSt, CRON_EVENT_PROVING_DEADLINE,
 };
 use fil_actor_power::{
     CurrentTotalPowerReturn, EnrollCronEventParams, Method as PowerMethod, UpdateClaimedPowerParams,
@@ -60,7 +54,7 @@ use multihash::MultihashDigest;
 
 use rand::prelude::*;
 
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{BTreeMap, HashMap};
 
 const RECEIVER_ID: u64 = 1000;
 
@@ -1102,12 +1096,12 @@ impl ActorHarness {
 
     pub fn apply_rewards(&self, rt: &mut MockRuntime, amt: TokenAmount, penalty: TokenAmount) {
         // This harness function does not handle the state where apply rewards is
-	    // on a miner with existing fee debt.  This state is not protocol reachable
-	    // because currently fee debt prevents election participation.
-	    //
-	    // We further assume the miner can pay the penalty.  If the miner
-	    // goes into debt we can't rely on the harness call
-	    // TODO unify those cases
+        // on a miner with existing fee debt.  This state is not protocol reachable
+        // because currently fee debt prevents election participation.
+        //
+        // We further assume the miner can pay the penalty.  If the miner
+        // goes into debt we can't rely on the harness call
+        // TODO unify those cases
         let (lock_amt, _) = locked_reward_from_reward(amt.clone());
         let pledge_delta = lock_amt - &penalty;
 
@@ -1134,12 +1128,9 @@ impl ActorHarness {
             );
         }
 
-        let params =
-            ApplyRewardParams { reward: amt, penalty: penalty };
-        rt.call::<Actor>(
-            Method::ApplyRewards as u64,
-            &RawBytes::serialize(params).unwrap(),
-        ).unwrap();
+        let params = ApplyRewardParams { reward: amt, penalty: penalty };
+        rt.call::<Actor>(Method::ApplyRewards as u64, &RawBytes::serialize(params).unwrap())
+            .unwrap();
         rt.verify();
     }
 
@@ -1160,7 +1151,8 @@ impl ActorHarness {
         //let sector_arr = Sectors::load(&rt.store, &state.sectors).unwrap();
         let mut deadlines: BTreeMap<u64, Vec<SectorOnChainInfo>> = BTreeMap::new();
         for sector in sectors {
-            let (dlidx, _) = state.find_sector(&rt.policy, &rt.store, sector.sector_number).unwrap();
+            let (dlidx, _) =
+                state.find_sector(&rt.policy, &rt.store, sector.sector_number).unwrap();
             match deadlines.get_mut(&dlidx) {
                 Some(dl_sectors) => {
                     dl_sectors.push(sector.clone());
@@ -1187,49 +1179,67 @@ impl ActorHarness {
 
                     let mut partitions: Vec<PoStPartition> = Vec::new();
                     let mut power_delta = PowerPair::zero();
-                    parts.for_each(|part_idx, part| {
-                        let sector_arr = Sectors::load(&rt.store, &state.sectors).unwrap();
-                        let live = part.live_sectors();
-                        let to_prove = &live | &sector_nos;
-                        if to_prove.is_empty() {
-                            return Ok(());
-                        }
-
-                        let mut to_skip = &live - &to_prove;
-                        let not_recovering = &part.faults - &part.recoveries;
-
-                        // Don't double-count skips.
-                        to_skip -= &not_recovering;
-
-                        let skipped_proven = &to_skip - &part.unproven;
-                        let mut skipped_proven_sector_infos = Vec::new();
-                        sector_arr.amt.for_each(|i, sector| {
-                            if skipped_proven.get(i) {
-                                skipped_proven_sector_infos.push(sector.clone());
+                    parts
+                        .for_each(|part_idx, part| {
+                            let sector_arr = Sectors::load(&rt.store, &state.sectors).unwrap();
+                            let live = part.live_sectors();
+                            let to_prove = &live | &sector_nos;
+                            if to_prove.is_empty() {
+                                return Ok(());
                             }
+
+                            let mut to_skip = &live - &to_prove;
+                            let not_recovering = &part.faults - &part.recoveries;
+
+                            // Don't double-count skips.
+                            to_skip -= &not_recovering;
+
+                            let skipped_proven = &to_skip - &part.unproven;
+                            let mut skipped_proven_sector_infos = Vec::new();
+                            sector_arr
+                                .amt
+                                .for_each(|i, sector| {
+                                    if skipped_proven.get(i) {
+                                        skipped_proven_sector_infos.push(sector.clone());
+                                    }
+                                    Ok(())
+                                })
+                                .unwrap();
+                            let new_faulty_power =
+                                self.power_pair_for_sectors(&skipped_proven_sector_infos);
+
+                            let new_proven = &part.unproven - &to_skip;
+                            let mut new_proven_infos = Vec::new();
+                            sector_arr
+                                .amt
+                                .for_each(|i, sector| {
+                                    if new_proven.get(i) {
+                                        new_proven_infos.push(sector.clone());
+                                    }
+                                    Ok(())
+                                })
+                                .unwrap();
+                            let new_proven_power = self.power_pair_for_sectors(&new_proven_infos);
+
+                            power_delta -= &new_faulty_power;
+                            power_delta += &new_proven_power;
+
+                            partitions.push(PoStPartition {
+                                index: part_idx,
+                                skipped: UnvalidatedBitField::Validated(to_skip),
+                            });
+
                             Ok(())
-                        }).unwrap();
-                        let new_faulty_power = self.power_pair_for_sectors(&skipped_proven_sector_infos);
+                        })
+                        .unwrap();
 
-                        let new_proven = &part.unproven - &to_skip;
-                        let mut new_proven_infos = Vec::new();
-                        sector_arr.amt.for_each(|i, sector| {
-                            if new_proven.get(i) {
-                                new_proven_infos.push(sector.clone());
-                            }
-                            Ok(())
-                        }).unwrap();
-                        let new_proven_power = self.power_pair_for_sectors(&new_proven_infos);
-
-                        power_delta -= &new_faulty_power;
-                        power_delta += &new_proven_power;
-
-                        partitions.push(PoStPartition{ index: part_idx, skipped: UnvalidatedBitField::Validated(to_skip) });
-
-                        Ok(())
-                    }).unwrap();
-
-                    self.submit_window_post(rt, &dlinfo, partitions, dl_sectors.clone(), PoStConfig::with_expected_power_delta(&power_delta));
+                    self.submit_window_post(
+                        rt,
+                        &dlinfo,
+                        partitions,
+                        dl_sectors.clone(),
+                        PoStConfig::with_expected_power_delta(&power_delta),
+                    );
                     deadlines.remove(&dlinfo.index);
                 }
             }
@@ -1239,7 +1249,11 @@ impl ActorHarness {
         }
     }
 
-    pub fn declare_faults(&self, rt: &mut MockRuntime, fault_sector_infos: &Vec<SectorOnChainInfo>) -> PowerPair{
+    pub fn declare_faults(
+        &self,
+        rt: &mut MockRuntime,
+        fault_sector_infos: &Vec<SectorOnChainInfo>,
+    ) -> PowerPair {
         rt.set_caller(*ACCOUNT_ACTOR_CODE_ID, self.worker);
         rt.expect_validate_caller_addr(self.caller_addrs());
 
@@ -1265,16 +1279,21 @@ impl ActorHarness {
         // Calculate params from faulted sector infos
         let state = self.get_state(rt);
         let params = make_fault_params_from_faulting_sectors(&rt, &state, fault_sector_infos);
-        rt.call::<Actor>(
-            Method::DeclareFaults as u64,
-            &RawBytes::serialize(params).unwrap(),
-        ).unwrap();
+        rt.call::<Actor>(Method::DeclareFaults as u64, &RawBytes::serialize(params).unwrap())
+            .unwrap();
         rt.verify();
 
-        PowerPair{raw: expected_raw_delta, qa: expected_qa_delta}
+        PowerPair { raw: expected_raw_delta, qa: expected_qa_delta }
     }
 
-    pub fn declare_recoveries(&self, rt: &mut MockRuntime, dlidx: u64, pidx: u64, recovery_sectors: BitField, expected_debt_repaid: TokenAmount) {
+    pub fn declare_recoveries(
+        &self,
+        rt: &mut MockRuntime,
+        dlidx: u64,
+        pidx: u64,
+        recovery_sectors: BitField,
+        expected_debt_repaid: TokenAmount,
+    ) {
         rt.set_caller(*ACCOUNT_ACTOR_CODE_ID, self.worker);
         rt.expect_validate_caller_addr(self.caller_addrs());
 
@@ -1295,13 +1314,12 @@ impl ActorHarness {
             partition: pidx,
             sectors: UnvalidatedBitField::Validated(recovery_sectors),
         };
-        let params = DeclareFaultsRecoveredParams {
-            recoveries: vec![recovery],
-        };
+        let params = DeclareFaultsRecoveredParams { recoveries: vec![recovery] };
         rt.call::<Actor>(
             Method::DeclareFaultsRecovered as u64,
             &RawBytes::serialize(params).unwrap(),
-        ).unwrap();
+        )
+        .unwrap();
         rt.verify();
     }
 
@@ -1505,14 +1523,18 @@ fn make_deferred_cron_event_params(
     }
 }
 
-fn make_fault_params_from_faulting_sectors(rt: &MockRuntime, state: &State, fault_sector_infos: &Vec<SectorOnChainInfo>) -> DeclareFaultsParams {
+fn make_fault_params_from_faulting_sectors(
+    rt: &MockRuntime,
+    state: &State,
+    fault_sector_infos: &Vec<SectorOnChainInfo>,
+) -> DeclareFaultsParams {
     let mut declaration_map: BTreeMap<(u64, u64), FaultDeclaration> = BTreeMap::new();
     for sector in fault_sector_infos {
         let (dlidx, pidx) = state.find_sector(&rt.policy, &rt.store, sector.sector_number).unwrap();
-        match declaration_map.get_mut(&(dlidx,pidx)) {
+        match declaration_map.get_mut(&(dlidx, pidx)) {
             Some(declaration) => {
                 declaration.sectors.validate_mut().unwrap().set(sector.sector_number);
-            },
+            }
             None => {
                 let mut bf = BitField::new();
                 bf.set(sector.sector_number);
@@ -1523,7 +1545,7 @@ fn make_fault_params_from_faulting_sectors(rt: &MockRuntime, state: &State, faul
                     sectors: UnvalidatedBitField::Validated(bf),
                 };
 
-                declaration_map.insert((dlidx,pidx), declaration);
+                declaration_map.insert((dlidx, pidx), declaration);
             }
         }
     }
@@ -1534,7 +1556,7 @@ fn make_fault_params_from_faulting_sectors(rt: &MockRuntime, state: &State, faul
     let keys: Vec<(u64, u64)> = declaration_map.keys().cloned().collect();
     let declarations = keys.iter().map(|k| declaration_map.remove(k).unwrap()).collect();
 
-    DeclareFaultsParams{ faults: declarations }
+    DeclareFaultsParams { faults: declarations }
 }
 
 #[allow(dead_code)]
