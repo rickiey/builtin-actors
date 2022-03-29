@@ -1589,7 +1589,7 @@ fn fixed_hasher(offset: ChainEpoch) -> Box<dyn Fn(&[u8]) -> [u8; 32]> {
     let hash = move |_: &[u8]| -> [u8; 32] {
         let mut result = [0u8; 32];
         for (i, item) in result.iter_mut().enumerate().take(8) {
-            *item = ((offset >> (7 - i)) & 0xff) as u8;
+            *item = ((offset >> (8 * (7 - i))) & 0xff) as u8;
         }
         result
     };
