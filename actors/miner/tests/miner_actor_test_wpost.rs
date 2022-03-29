@@ -682,7 +682,7 @@ fn successful_recoveries_recover_power() {
     let pwr = miner::power_for_sectors(h.sector_size, &infos);
 
     h.apply_rewards(&mut rt, TokenAmount::from(BIG_REWARDS), TokenAmount::from(0));
-    let initial_locked = h.get_locked_funds(&rt);
+    //let initial_locked = h.get_locked_funds(&rt);
 
     // Submit first PoSt to ensure we are sufficiently early to add a fault
     // advance to next proving period
