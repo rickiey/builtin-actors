@@ -1186,7 +1186,7 @@ impl ActorHarness {
                         .for_each(|part_idx, part| {
                             let sector_arr = Sectors::load(&rt.store, &state.sectors).unwrap();
                             let live = part.live_sectors();
-                            let to_prove = &live | &sector_nos;
+                            let to_prove = &live & &sector_nos;
                             if to_prove.is_empty() {
                                 return Ok(());
                             }
