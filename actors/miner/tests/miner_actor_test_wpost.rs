@@ -876,7 +876,58 @@ fn skipping_all_sectors_in_a_partition_rejected() {
 }
 
 #[test]
-fn skipped_recoveries_are_penalized_and_do_not_recover_power() {}
+fn skipped_recoveries_are_penalized_and_do_not_recover_power() {
+    let period_offset = ChainEpoch::from(100);
+    let precommit_epoch = ChainEpoch::from(1);
+
+    let mut h = ActorHarness::new(period_offset);
+    h.set_proof_type(RegisteredSealProof::StackedDRG2KiBV1P1);
+
+    let mut rt = h.new_runtime();
+    rt.epoch = precommit_epoch;
+    rt.balance.replace(TokenAmount::from(BIG_BALANCE));
+
+    h.construct_and_verify(&mut rt);
+
+    let infos = h.commit_and_prove_sectors(&mut rt, 2, DEFAULT_SECTOR_EXPIRATION, vec![], true);
+
+    h.apply_rewards(&mut rt, TokenAmount::from(BIG_REWARDS), TokenAmount::from(0));
+
+    // Submit first PoSt to ensure we are sufficiently early to add a fault
+    // advance to next proving period
+    h.advance_and_submit_posts(&mut rt, &infos);
+
+    // advance deadline and declare fault on the first sector
+    let infos1 = vec![infos[0].clone()];
+    h.advance_deadline(&mut rt, CronConfig::empty());
+    h.declare_faults(&mut rt, &infos1);
+
+    // advance a deadline and declare recovery
+    h.advance_deadline(&mut rt, CronConfig::empty());
+
+    // declare recovery
+    let state = h.get_state(&rt);
+    let (dlidx, pidx) = state.find_sector(&rt.policy, &rt.store, infos[0].sector_number).unwrap();
+    let mut bf = BitField::new();
+    bf.set(infos[0].sector_number);
+    h.declare_recoveries(&mut rt, dlidx, pidx, bf, TokenAmount::from(0));
+
+    // Skip to the due deadline.
+    let dlinfo = h.advance_to_deadline(&mut rt, dlidx);
+
+    // Now submit PoSt and skip recovered sector.
+    // No power should be returned
+    let partition =
+        miner::PoStPartition { index: pidx, skipped: make_bitfield(&[infos[0].sector_number]) };
+    h.submit_window_post(&mut rt, &dlinfo, vec![partition], infos.clone(), PoStConfig::empty());
+
+    // sector will be charged ongoing fee at proving period cron
+    let infos2 = vec![infos[1].clone()];
+    let ongoing_fee = h.continued_fault_penalty(&infos2);
+    h.advance_deadline(&mut rt, CronConfig::with_continued_faults_penalty(ongoing_fee));
+
+    check_state_invariants(&rt);
+}
 
 #[test]
 fn skipping_a_fault_from_the_wrong_partition_is_an_error() {}
