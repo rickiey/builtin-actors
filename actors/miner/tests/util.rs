@@ -1550,6 +1550,7 @@ fn make_deferred_cron_event_params(
     }
 }
 
+#[allow(clippy::all)]
 fn make_fault_params_from_faulting_sectors(
     rt: &MockRuntime,
     state: &State,
