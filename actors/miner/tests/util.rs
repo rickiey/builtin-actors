@@ -1142,7 +1142,7 @@ impl ActorHarness {
         state.locked_funds
     }
 
-    pub fn advance_and_submit_posts(&self, rt: &mut MockRuntime, sectors: &Vec<SectorOnChainInfo>) {
+    pub fn advance_and_submit_posts(&self, rt: &mut MockRuntime, sectors: &[SectorOnChainInfo]) {
         // Advance between 0 and 48 deadlines submitting window posts where necessary to keep
         // sectors proven.  If sectors is empty this is a noop. If sectors is a singleton this
         // will advance to that sector's proving deadline running deadline crons up to and
@@ -1255,7 +1255,7 @@ impl ActorHarness {
     pub fn declare_faults(
         &self,
         rt: &mut MockRuntime,
-        fault_sector_infos: &Vec<SectorOnChainInfo>,
+        fault_sector_infos: &[SectorOnChainInfo],
     ) -> PowerPair {
         rt.set_caller(*ACCOUNT_ACTOR_CODE_ID, self.worker);
         rt.expect_validate_caller_addr(self.caller_addrs());
@@ -1326,7 +1326,7 @@ impl ActorHarness {
         rt.verify();
     }
 
-    pub fn continued_fault_penalty(&self, sectors: &Vec<SectorOnChainInfo>) -> TokenAmount {
+    pub fn continued_fault_penalty(&self, sectors: &[SectorOnChainInfo]) -> TokenAmount {
         let pwr = power_for_sectors(self.sector_size, sectors);
         pledge_penalty_for_continued_fault(
             &self.epoch_reward_smooth,
@@ -1351,7 +1351,7 @@ impl ActorHarness {
         state.deadline_info(&rt.policy, rt.epoch)
     }
 
-    fn power_pair_for_sectors(&self, sectors: &Vec<SectorOnChainInfo>) -> PowerPair {
+    fn power_pair_for_sectors(&self, sectors: &[SectorOnChainInfo]) -> PowerPair {
         power_for_sectors(self.sector_size, sectors)
     }
 }
@@ -1554,7 +1554,7 @@ fn make_deferred_cron_event_params(
 fn make_fault_params_from_faulting_sectors(
     rt: &MockRuntime,
     state: &State,
-    fault_sector_infos: &Vec<SectorOnChainInfo>,
+    fault_sector_infos: &[SectorOnChainInfo],
 ) -> DeclareFaultsParams {
     let mut declaration_map: BTreeMap<(u64, u64), FaultDeclaration> = BTreeMap::new();
     for sector in fault_sector_infos {
