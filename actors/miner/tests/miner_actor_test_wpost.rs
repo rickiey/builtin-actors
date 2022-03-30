@@ -932,7 +932,55 @@ fn skipped_recoveries_are_penalized_and_do_not_recover_power() {
 }
 
 #[test]
-fn skipping_a_fault_from_the_wrong_partition_is_an_error() {}
+fn skipping_a_fault_from_the_wrong_partition_is_an_error() {
+    let period_offset = ChainEpoch::from(100);
+    let precommit_epoch = ChainEpoch::from(1);
+
+    let mut h = ActorHarness::new(period_offset);
+    h.set_proof_type(RegisteredSealProof::StackedDRG2KiBV1P1);
+
+    let mut rt = h.new_runtime();
+    rt.epoch = precommit_epoch;
+    rt.balance.replace(TokenAmount::from(BIG_BALANCE));
+
+    h.construct_and_verify(&mut rt);
+
+    // create enough sectors that one will be in a different partition
+    const N: usize = 95;
+    let infos = h.commit_and_prove_sectors(&mut rt, N, DEFAULT_SECTOR_EXPIRATION, vec![], true);
+
+    // Skip to the due deadline.
+    let state = h.get_state(&rt);
+    let (dlidx0, pidx0) = state.find_sector(&rt.policy, &rt.store, infos[0].sector_number).unwrap();
+    let (dlidx1, pidx1) =
+        state.find_sector(&rt.policy, &rt.store, infos[N - 1].sector_number).unwrap();
+    let dlinfo = h.advance_to_deadline(&mut rt, dlidx0);
+
+    // if these assertions no longer hold, the test must be changed
+    assert!(dlidx0 < dlidx1);
+    assert!(pidx0 != pidx1);
+
+    // Now submit PoSt for partition 1 and skip sector from other partition
+    let partition = miner::PoStPartition {
+        index: pidx0,
+        skipped: make_bitfield(&[infos[N - 1].sector_number]),
+    };
+    let params = miner::SubmitWindowedPoStParams {
+        deadline: dlinfo.index,
+        partitions: vec![partition],
+        proofs: make_post_proofs(h.window_post_proof_type),
+        chain_commit_epoch: dlinfo.challenge,
+        chain_commit_rand: Randomness(b"chaincommitment".to_vec()),
+    };
+    let result = h.submit_window_post_raw(&mut rt, &dlinfo, infos, params, PoStConfig::empty());
+    expect_abort_contains_message(
+        ExitCode::ErrIllegalArgument,
+        "skipped faults contains sectors outside partition",
+        result,
+    );
+
+    check_state_invariants(&rt);
+}
 
 #[test]
 fn cannot_dispute_posts_when_the_challenge_window_is_open() {}
