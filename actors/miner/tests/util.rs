@@ -6,10 +6,11 @@ use fil_actor_market::{
 };
 use fil_actor_miner::{
     initial_pledge_for_power, locked_reward_from_reward, new_deadline_info_from_offset_and_epoch,
-    power_for_sectors, qa_power_for_weight, Actor, ApplyRewardParams, ChangeMultiaddrsParams,
-    ChangePeerIDParams, ConfirmSectorProofsParams, CronEventPayload, Deadline, DeadlineInfo,
-    Deadlines, DeclareFaultsParams, DeclareFaultsRecoveredParams, DeferredCronEventParams,
-    DisputeWindowedPoStParams, FaultDeclaration, GetControlAddressesReturn, Method,
+    pledge_penalty_for_continued_fault, power_for_sectors, qa_power_for_weight, Actor,
+    ApplyRewardParams, ChangeMultiaddrsParams, ChangePeerIDParams, ConfirmSectorProofsParams,
+    CronEventPayload, Deadline, DeadlineInfo, Deadlines, DeclareFaultsParams,
+    DeclareFaultsRecoveredParams, DeferredCronEventParams, DisputeWindowedPoStParams,
+    FaultDeclaration, GetControlAddressesReturn, Method,
     MinerConstructorParams as ConstructorParams, Partition, PoStPartition, PowerPair,
     PreCommitSectorParams, ProveCommitSectorParams, RecoveryDeclaration, SectorOnChainInfo,
     SectorPreCommitOnChainInfo, Sectors, State, SubmitWindowedPoStParams, VestingFunds,
@@ -1323,6 +1324,15 @@ impl ActorHarness {
         rt.verify();
     }
 
+    pub fn continued_fault_penalty(&self, sectors: &Vec<SectorOnChainInfo>) -> TokenAmount {
+        let pwr = power_for_sectors(self.sector_size, sectors);
+        pledge_penalty_for_continued_fault(
+            &self.epoch_reward_smooth,
+            &self.epoch_qa_power_smooth,
+            &pwr.qa,
+        )
+    }
+
     pub fn find_sector(&self, rt: &MockRuntime, sno: SectorNumber) -> (Deadline, Partition) {
         let state = self.get_state(rt);
         let deadlines = state.load_deadlines(&rt.store).unwrap();
@@ -1428,6 +1438,22 @@ impl CronConfig {
             repaid_fee_debt: TokenAmount::from(0),
             penalty_from_unlocked: TokenAmount::from(0),
         }
+    }
+
+    pub fn with_continued_faults_penalty(fault_fee: TokenAmount) -> CronConfig {
+        let mut cfg = CronConfig::empty();
+        cfg.continued_faults_penalty = fault_fee;
+        cfg
+    }
+
+    pub fn with_detected_faults_power_delta_and_continued_faults_penalty(
+        pwr_delta: &PowerPair,
+        fault_fee: TokenAmount,
+    ) -> CronConfig {
+        let mut cfg = CronConfig::empty();
+        cfg.detected_faults_power_delta = Some(pwr_delta.clone());
+        cfg.continued_faults_penalty = fault_fee;
+        cfg
     }
 }
 

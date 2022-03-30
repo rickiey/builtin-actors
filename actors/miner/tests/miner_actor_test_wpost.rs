@@ -740,7 +740,92 @@ fn successful_recoveries_recover_power() {
 }
 
 #[test]
-fn skipped_faults_adjust_power() {}
+fn skipped_faults_adjust_power() {
+    let period_offset = ChainEpoch::from(100);
+    let precommit_epoch = ChainEpoch::from(1);
+
+    let mut h = ActorHarness::new(period_offset);
+    h.set_proof_type(RegisteredSealProof::StackedDRG2KiBV1P1);
+
+    let mut rt = h.new_runtime();
+    rt.epoch = precommit_epoch;
+    rt.balance.replace(TokenAmount::from(BIG_BALANCE));
+
+    h.construct_and_verify(&mut rt);
+
+    let infos = h.commit_and_prove_sectors(&mut rt, 2, DEFAULT_SECTOR_EXPIRATION, vec![], true);
+
+    h.apply_rewards(&mut rt, TokenAmount::from(BIG_REWARDS), TokenAmount::from(0));
+
+    // Skip to the due deadline.
+    let state = h.get_state(&rt);
+    let (dlidx, pidx) = state.find_sector(&rt.policy, &rt.store, infos[0].sector_number).unwrap();
+    let (dlidx2, pidx2) = state.find_sector(&rt.policy, &rt.store, infos[1].sector_number).unwrap();
+    // this test will need to change when these are not equal
+    assert_eq!(dlidx, dlidx2);
+
+    let mut dlinfo = h.advance_to_deadline(&mut rt, dlidx);
+
+    // Now submit PoSt with a skipped fault for first sector
+    // First sector's power should not be activated.
+    let infos1 = vec![infos[0].clone()];
+    let infos2 = vec![infos[1].clone()];
+    let power_active = miner::power_for_sectors(h.sector_size, &infos2);
+    let partition =
+        miner::PoStPartition { index: pidx, skipped: make_bitfield(&[infos[0].sector_number]) };
+    h.submit_window_post(
+        &mut rt,
+        &dlinfo,
+        vec![partition],
+        infos2.clone(),
+        PoStConfig::with_expected_power_delta(&power_active),
+    );
+
+    // expect continued fault fee to be charged during cron
+    let fault_fee = h.continued_fault_penalty(&infos1);
+    dlinfo = h.advance_deadline(&mut rt, CronConfig::with_continued_faults_penalty(fault_fee));
+
+    // advance to next proving period, expect no fees
+    while dlinfo.index != dlidx {
+        dlinfo = h.advance_deadline(&mut rt, CronConfig::empty());
+    }
+
+    // Attempt to skip second sector
+    let pwr_delta = -miner::power_for_sectors(h.sector_size, &infos2);
+    let partition =
+        miner::PoStPartition { index: pidx2, skipped: make_bitfield(&[infos[1].sector_number]) };
+    let params = miner::SubmitWindowedPoStParams {
+        deadline: dlinfo.index,
+        partitions: vec![partition],
+        proofs: make_post_proofs(h.window_post_proof_type),
+        chain_commit_epoch: dlinfo.challenge,
+        chain_commit_rand: Randomness(b"chaincommitment".to_vec()),
+    };
+
+    // Now all sectors are faulty so there's nothing to prove.
+    let result = h.submit_window_post_raw(
+        &mut rt,
+        &dlinfo,
+        infos2.clone(),
+        params,
+        PoStConfig::with_expected_power_delta(&pwr_delta),
+    );
+    expect_abort_contains_message(ExitCode::ErrIllegalArgument, "no active sectors", result);
+    rt.reset();
+
+    // The second sector is detected faulty but pays nothing yet.
+    // Expect ongoing fault penalty for only the first, continuing-faulty sector.
+    let pwr_delta = -miner::power_for_sectors(h.sector_size, &infos2);
+    let fault_fee = h.continued_fault_penalty(&infos1);
+    h.advance_deadline(
+        &mut rt,
+        CronConfig::with_detected_faults_power_delta_and_continued_faults_penalty(
+            &pwr_delta, fault_fee,
+        ),
+    );
+
+    check_state_invariants(&rt);
+}
 
 #[test]
 fn skipping_all_sectors_in_a_partition_rejected() {}
