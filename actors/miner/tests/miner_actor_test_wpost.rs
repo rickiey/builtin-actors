@@ -1155,4 +1155,86 @@ fn cant_dispute_up_with_an_invalid_deadline() {
 }
 
 #[test]
-fn can_dispute_test_after_proving_period_changes() {}
+fn can_dispute_test_after_proving_period_changes() {
+    let period_offset = ChainEpoch::from(100);
+    let precommit_epoch = ChainEpoch::from(1);
+
+    let mut h = ActorHarness::new(period_offset);
+    h.set_proof_type(RegisteredSealProof::StackedDRG2KiBV1P1);
+
+    let mut rt = h.new_runtime();
+    rt.epoch = precommit_epoch;
+    rt.balance.replace(TokenAmount::from(BIG_BALANCE));
+
+    h.construct_and_verify(&mut rt);
+
+    let period_start = h.deadline(&rt).next_period_start();
+
+    // go to the next deadline 0
+    rt.epoch = period_start;
+
+    // fill one partition in each mutable deadline.
+    let num_sectors = h.partition_size * (rt.policy.wpost_period_deadlines - 2);
+
+    // creates a partition in every deadline except 0 and 47
+    let sectors = h.commit_and_prove_sectors(
+        &mut rt,
+        num_sectors as usize,
+        DEFAULT_SECTOR_EXPIRATION,
+        vec![],
+        true,
+    );
+
+    // prove every sector once to activate power. This
+    // simplifies the test a bit.
+    h.advance_and_submit_posts(&mut rt, &sectors);
+
+    // Make sure we're in the correct deadline. We should
+    // finish at deadline 2 because precommit takes some
+    // time.
+    let dlinfo = h.deadline(&rt);
+    assert!(
+        dlinfo.index < 46,
+        "we need to be before the target deadline for this test to make sense"
+    );
+
+    // Now challenge find the sectors in the last partition.
+    let (_, partition) = h.get_deadline_and_partition(&rt, 46, 0);
+    let mut target_sectors = Vec::new();
+    for i in partition.sectors.iter() {
+        for sector in sectors.iter() {
+            if sector.sector_number == i {
+                target_sectors.push(sector.clone());
+            }
+        }
+    }
+    assert!(!target_sectors.is_empty());
+
+    let pwr = miner::power_for_sectors(h.sector_size, &target_sectors);
+
+    // And challenge the last partition.
+    let expected_fee = miner::pledge_penalty_for_invalid_windowpost(
+        &h.epoch_reward_smooth,
+        &h.epoch_qa_power_smooth,
+        &pwr.qa,
+    );
+    let post_dispute_result = PoStDisputeResult {
+        expected_power_delta: Some(-pwr),
+        expected_penalty: Some(expected_fee),
+        expected_reward: Some(miner::BASE_REWARD_FOR_DISPUTED_WINDOW_POST.clone()),
+        expected_pledge_delta: None,
+    };
+
+    let target_dlinfo = miner::DeadlineInfo::new(
+        period_start,
+        46,
+        rt.epoch,
+        rt.policy.wpost_period_deadlines,
+        rt.policy.wpost_proving_period,
+        rt.policy.wpost_challenge_window,
+        rt.policy.wpost_challenge_lookback,
+        rt.policy.fault_declaration_cutoff,
+    );
+
+    h.dispute_window_post(&mut rt, &target_dlinfo, 0, &target_sectors, Some(post_dispute_result));
+}

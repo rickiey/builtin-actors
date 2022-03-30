@@ -1354,6 +1354,21 @@ impl ActorHarness {
     fn power_pair_for_sectors(&self, sectors: &[SectorOnChainInfo]) -> PowerPair {
         power_for_sectors(self.sector_size, sectors)
     }
+
+    pub fn get_deadline_and_partition(
+        &self,
+        rt: &MockRuntime,
+        dlidx: u64,
+        pidx: u64,
+    ) -> (Deadline, Partition) {
+        let deadline = self.get_deadline(&rt, dlidx);
+        let partition = self.get_partition(&rt, &deadline, pidx);
+        (deadline, partition)
+    }
+
+    fn get_partition(&self, rt: &MockRuntime, deadline: &Deadline, pidx: u64) -> Partition {
+        deadline.load_partition(&rt.store, pidx).unwrap()
+    }
 }
 
 #[allow(dead_code)]
