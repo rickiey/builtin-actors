@@ -1128,7 +1128,31 @@ fn can_dispute_up_till_window_end_but_not_after() {
 }
 
 #[test]
-fn cant_dispute_up_with_an_invalid_deadline() {}
+fn cant_dispute_up_with_an_invalid_deadline() {
+    let period_offset = ChainEpoch::from(100);
+    let precommit_epoch = ChainEpoch::from(1);
+
+    let mut h = ActorHarness::new(period_offset);
+    h.set_proof_type(RegisteredSealProof::StackedDRG2KiBV1P1);
+
+    let mut rt = h.new_runtime();
+    rt.epoch = precommit_epoch;
+    rt.balance.replace(TokenAmount::from(BIG_BALANCE));
+
+    h.construct_and_verify(&mut rt);
+
+    let params = miner::DisputeWindowedPoStParams { deadline: 50, post_index: 0 };
+
+    rt.set_caller(*ACCOUNT_ACTOR_CODE_ID, h.worker);
+    rt.expect_validate_caller_type(vec![*ACCOUNT_ACTOR_CODE_ID, *MULTISIG_ACTOR_CODE_ID]);
+
+    let result = rt.call::<miner::Actor>(
+        miner::Method::DisputeWindowedPoSt as u64,
+        &RawBytes::serialize(params).unwrap(),
+    );
+    expect_abort_contains_message(ExitCode::ErrIllegalArgument, "invalid deadline", result);
+    rt.verify();
+}
 
 #[test]
 fn can_dispute_test_after_proving_period_changes() {}
