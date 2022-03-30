@@ -828,7 +828,52 @@ fn skipped_faults_adjust_power() {
 }
 
 #[test]
-fn skipping_all_sectors_in_a_partition_rejected() {}
+fn skipping_all_sectors_in_a_partition_rejected() {
+    let period_offset = ChainEpoch::from(100);
+    let precommit_epoch = ChainEpoch::from(1);
+
+    let mut h = ActorHarness::new(period_offset);
+    h.set_proof_type(RegisteredSealProof::StackedDRG2KiBV1P1);
+
+    let mut rt = h.new_runtime();
+    rt.epoch = precommit_epoch;
+    rt.balance.replace(TokenAmount::from(BIG_BALANCE));
+
+    h.construct_and_verify(&mut rt);
+
+    let infos = h.commit_and_prove_sectors(&mut rt, 2, DEFAULT_SECTOR_EXPIRATION, vec![], true);
+
+    // Skip to the due deadline.
+    let state = h.get_state(&rt);
+    let (dlidx, pidx) = state.find_sector(&rt.policy, &rt.store, infos[0].sector_number).unwrap();
+    let (dlidx2, pidx2) = state.find_sector(&rt.policy, &rt.store, infos[1].sector_number).unwrap();
+    // this test will need to change when these are not equal
+    assert_eq!(dlidx, dlidx2);
+    assert_eq!(pidx, pidx2);
+
+    let dlinfo = h.advance_to_deadline(&mut rt, dlidx);
+
+    // PoSt with all sectors skipped fails to validate, leaving power un-activated.
+    let partition = miner::PoStPartition {
+        index: pidx,
+        skipped: make_bitfield(&[infos[0].sector_number, infos[1].sector_number]),
+    };
+    let params = miner::SubmitWindowedPoStParams {
+        deadline: dlinfo.index,
+        partitions: vec![partition],
+        proofs: make_post_proofs(h.window_post_proof_type),
+        chain_commit_epoch: dlinfo.challenge,
+        chain_commit_rand: Randomness(b"chaincommitment".to_vec()),
+    };
+    let result =
+        h.submit_window_post_raw(&mut rt, &dlinfo, infos.clone(), params, PoStConfig::empty());
+    expect_abort(ExitCode::ErrIllegalArgument, result);
+    rt.reset();
+
+    // These sectors are detected faulty and pay no penalty this time.
+    h.advance_deadline(&mut rt, CronConfig::with_continued_faults_penalty(TokenAmount::from(0)));
+    check_state_invariants(&rt);
+}
 
 #[test]
 fn skipped_recoveries_are_penalized_and_do_not_recover_power() {}
