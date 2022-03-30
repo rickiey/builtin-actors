@@ -92,6 +92,7 @@ pub struct ActorHarness {
 }
 
 #[allow(dead_code)]
+#[allow(clippy::all)]
 impl ActorHarness {
     pub fn new(proving_period_offset: ChainEpoch) -> ActorHarness {
         let owner = Address::new_id(100);
