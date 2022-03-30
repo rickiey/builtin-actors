@@ -1,9 +1,13 @@
 #![allow(clippy::all)]
 
 use fil_actor_miner as miner;
+use fil_actor_power as power;
+use fil_actor_reward as reward;
 use fil_actors_runtime::test_utils::*;
+use fil_actors_runtime::{REWARD_ACTOR_ADDR, STORAGE_POWER_ACTOR_ADDR};
 
 use fvm_ipld_bitfield::BitField;
+use fvm_shared::bigint::BigInt;
 use fvm_shared::clock::ChainEpoch;
 use fvm_shared::crypto::randomness::DomainSeparationTag;
 use fvm_shared::econ::TokenAmount;
@@ -1035,7 +1039,93 @@ fn cannot_dispute_posts_when_the_challenge_window_is_open() {
 }
 
 #[test]
-fn can_dispute_up_till_window_end_but_not_after() {}
+fn can_dispute_up_till_window_end_but_not_after() {
+    let period_offset = ChainEpoch::from(100);
+    let precommit_epoch = ChainEpoch::from(1);
+
+    let mut h = ActorHarness::new(period_offset);
+    h.set_proof_type(RegisteredSealProof::StackedDRG2KiBV1P1);
+
+    let mut rt = h.new_runtime();
+    rt.epoch = precommit_epoch;
+    rt.balance.replace(TokenAmount::from(BIG_BALANCE));
+
+    h.construct_and_verify(&mut rt);
+
+    let infos = h.commit_and_prove_sectors(&mut rt, 1, DEFAULT_SECTOR_EXPIRATION, vec![], true);
+    let sector = infos[0].clone();
+
+    let state = h.get_state(&rt);
+    let (dlidx, _) = state.find_sector(&rt.policy, &rt.store, sector.sector_number).unwrap();
+
+    let nextdl = miner::DeadlineInfo::new(
+        state.proving_period_start,
+        dlidx,
+        rt.epoch,
+        rt.policy.wpost_period_deadlines,
+        rt.policy.wpost_proving_period,
+        rt.policy.wpost_challenge_window,
+        rt.policy.wpost_challenge_lookback,
+        rt.policy.fault_declaration_cutoff,
+    )
+    .next_not_elapsed();
+
+    h.advance_and_submit_posts(&mut rt, &infos);
+    let window_end = nextdl.close + rt.policy.wpost_dispute_window;
+
+    // first, try to dispute right before the window end.
+    // We expect this to fail "normally" (fail to disprove).
+    rt.epoch = window_end - 1;
+    h.dispute_window_post(&mut rt, &nextdl, 0, &infos, None);
+
+    // Now set the epoch at the window end. We expect a different error.
+    rt.epoch = window_end;
+
+    // Now try to dispute.
+    let params = miner::DisputeWindowedPoStParams { deadline: dlidx, post_index: 0 };
+    rt.set_caller(*ACCOUNT_ACTOR_CODE_ID, h.worker);
+    rt.expect_validate_caller_type(vec![*ACCOUNT_ACTOR_CODE_ID, *MULTISIG_ACTOR_CODE_ID]);
+
+    let current_reward = reward::ThisEpochRewardReturn {
+        this_epoch_baseline_power: h.baseline_power,
+        this_epoch_reward_smoothed: h.epoch_reward_smooth,
+    };
+    rt.expect_send(
+        *REWARD_ACTOR_ADDR,
+        reward::Method::ThisEpochReward as u64,
+        RawBytes::default(),
+        TokenAmount::from(0),
+        RawBytes::serialize(current_reward).unwrap(),
+        ExitCode::Ok,
+    );
+
+    let network_power = BigInt::from(1i64 << 50);
+    let current_power = power::CurrentTotalPowerReturn {
+        raw_byte_power: network_power.clone(),
+        quality_adj_power: network_power.clone(),
+        pledge_collateral: h.network_pledge,
+        quality_adj_power_smoothed: h.epoch_qa_power_smooth,
+    };
+    rt.expect_send(
+        *STORAGE_POWER_ACTOR_ADDR,
+        power::Method::CurrentTotalPower as u64,
+        RawBytes::default(),
+        TokenAmount::from(0),
+        RawBytes::serialize(current_power).unwrap(),
+        ExitCode::Ok,
+    );
+
+    let result = rt.call::<miner::Actor>(
+        miner::Method::DisputeWindowedPoSt as u64,
+        &RawBytes::serialize(params).unwrap(),
+    );
+    expect_abort_contains_message(
+        ExitCode::ErrForbidden,
+        "can only dispute window posts during the dispute window",
+        result,
+    );
+    rt.verify();
+}
 
 #[test]
 fn cant_dispute_up_with_an_invalid_deadline() {}
