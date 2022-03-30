@@ -1,3 +1,5 @@
+#![allow(clippy::all)]
+
 use fil_actor_miner as miner;
 use fil_actors_runtime::test_utils::*;
 
@@ -22,7 +24,6 @@ const BIG_BALANCE: u128 = 1_000_000_000_000_000_000_000_000u128;
 const BIG_REWARDS: u128 = 1_000_000_000_000_000_000_000u128;
 
 #[test]
-#[allow(clippy::all)]
 fn basic_post_and_dispute() {
     let period_offset = ChainEpoch::from(100);
     let precommit_epoch = ChainEpoch::from(1);
@@ -97,7 +98,6 @@ fn basic_post_and_dispute() {
 }
 
 #[test]
-#[allow(clippy::all)]
 fn invalid_submissions() {
     let period_offset = ChainEpoch::from(100);
     let precommit_epoch = ChainEpoch::from(1);
@@ -484,7 +484,6 @@ fn invalid_submissions() {
 }
 
 #[test]
-#[allow(clippy::all)]
 fn duplicate_proof_rejected() {
     let period_offset = ChainEpoch::from(100);
     let precommit_epoch = ChainEpoch::from(1);
@@ -563,7 +562,6 @@ fn duplicate_proof_rejected() {
 }
 
 #[test]
-#[allow(clippy::all)]
 fn duplicate_proof_rejected_with_many_partitions() {
     let period_offset = ChainEpoch::from(100);
     let precommit_epoch = ChainEpoch::from(1);
@@ -669,7 +667,6 @@ fn duplicate_proof_rejected_with_many_partitions() {
 }
 
 #[test]
-#[allow(clippy::all)]
 fn successful_recoveries_recover_power() {
     let period_offset = ChainEpoch::from(100);
     let precommit_epoch = ChainEpoch::from(1);
@@ -745,7 +742,6 @@ fn successful_recoveries_recover_power() {
 }
 
 #[test]
-#[allow(clippy::all)]
 fn skipped_faults_adjust_power() {
     let period_offset = ChainEpoch::from(100);
     let precommit_epoch = ChainEpoch::from(1);
@@ -834,7 +830,6 @@ fn skipped_faults_adjust_power() {
 }
 
 #[test]
-#[allow(clippy::all)]
 fn skipping_all_sectors_in_a_partition_rejected() {
     let period_offset = ChainEpoch::from(100);
     let precommit_epoch = ChainEpoch::from(1);
@@ -883,7 +878,6 @@ fn skipping_all_sectors_in_a_partition_rejected() {
 }
 
 #[test]
-#[allow(clippy::all)]
 fn skipped_recoveries_are_penalized_and_do_not_recover_power() {
     let period_offset = ChainEpoch::from(100);
     let precommit_epoch = ChainEpoch::from(1);
@@ -938,21 +932,16 @@ fn skipped_recoveries_are_penalized_and_do_not_recover_power() {
 }
 
 #[test]
-#[allow(clippy::all)]
 fn skipping_a_fault_from_the_wrong_partition_is_an_error() {}
 
 #[test]
-#[allow(clippy::all)]
 fn cannot_dispute_posts_when_the_challenge_window_is_open() {}
 
 #[test]
-#[allow(clippy::all)]
 fn can_dispute_up_till_window_end_but_not_after() {}
 
 #[test]
-#[allow(clippy::all)]
 fn cant_dispute_up_with_an_invalid_deadline() {}
 
 #[test]
-#[allow(clippy::all)]
 fn can_dispute_test_after_proving_period_changes() {}

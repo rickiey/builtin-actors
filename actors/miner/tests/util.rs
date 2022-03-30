@@ -1,3 +1,5 @@
+#![allow(clippy::all)]
+
 use fil_actor_account::Method as AccountMethod;
 use fil_actor_market::{
     ActivateDealsParams, ComputeDataCommitmentParams, ComputeDataCommitmentReturn,
@@ -92,7 +94,6 @@ pub struct ActorHarness {
 }
 
 #[allow(dead_code)]
-#[allow(clippy::all)]
 impl ActorHarness {
     pub fn new(proving_period_offset: ChainEpoch) -> ActorHarness {
         let owner = Address::new_id(100);
@@ -1550,7 +1551,6 @@ fn make_deferred_cron_event_params(
     }
 }
 
-#[allow(clippy::all)]
 fn make_fault_params_from_faulting_sectors(
     rt: &MockRuntime,
     state: &State,
