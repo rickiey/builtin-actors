@@ -983,7 +983,56 @@ fn skipping_a_fault_from_the_wrong_partition_is_an_error() {
 }
 
 #[test]
-fn cannot_dispute_posts_when_the_challenge_window_is_open() {}
+fn cannot_dispute_posts_when_the_challenge_window_is_open() {
+    let period_offset = ChainEpoch::from(100);
+    let precommit_epoch = ChainEpoch::from(1);
+
+    let mut h = ActorHarness::new(period_offset);
+    h.set_proof_type(RegisteredSealProof::StackedDRG2KiBV1P1);
+
+    let mut rt = h.new_runtime();
+    rt.epoch = precommit_epoch;
+    rt.balance.replace(TokenAmount::from(BIG_BALANCE));
+
+    h.construct_and_verify(&mut rt);
+
+    let infos = h.commit_and_prove_sectors(&mut rt, 1, DEFAULT_SECTOR_EXPIRATION, vec![], true);
+    let sector = infos[0].clone();
+    let pwr = miner::power_for_sector(h.sector_size, &sector);
+
+    // Skip to the due deadline.
+    let state = h.get_state(&rt);
+    let (dlidx, pidx) = state.find_sector(&rt.policy, &rt.store, sector.sector_number).unwrap();
+    let dlinfo = h.advance_to_deadline(&mut rt, dlidx);
+
+    // Submit PoSt
+    let partition = miner::PoStPartition { index: pidx, skipped: make_empty_bitfield() };
+    h.submit_window_post(
+        &mut rt,
+        &dlinfo,
+        vec![partition],
+        infos,
+        PoStConfig::with_expected_power_delta(&pwr),
+    );
+
+    // Dispute it.
+    let params = miner::DisputeWindowedPoStParams { deadline: dlinfo.index, post_index: 0 };
+
+    rt.set_caller(*ACCOUNT_ACTOR_CODE_ID, h.worker);
+    rt.expect_validate_caller_type(vec![*ACCOUNT_ACTOR_CODE_ID, *MULTISIG_ACTOR_CODE_ID]);
+    h.expect_query_network_info(&mut rt);
+
+    let result = rt.call::<miner::Actor>(
+        miner::Method::DisputeWindowedPoSt as u64,
+        &RawBytes::serialize(params).unwrap(),
+    );
+    expect_abort_contains_message(
+        ExitCode::ErrForbidden,
+        "can only dispute window posts during the dispute window",
+        result,
+    );
+    rt.verify();
+}
 
 #[test]
 fn can_dispute_up_till_window_end_but_not_after() {}
