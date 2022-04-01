@@ -745,10 +745,6 @@ impl Runtime<MemoryBlockstore> for MockRuntime {
         unimplemented!();
     }
 
-    fn charge_gas(&mut self, _: &'static str, _: i64) {
-        // TODO implement functionality if needed for testing
-    }
-
     fn base_fee(&self) -> TokenAmount {
         self.base_fee.clone()
     }
@@ -899,6 +895,15 @@ impl Syscalls for MockRuntime {
         _aggregate: &AggregateSealVerifyProofAndInfos,
     ) -> anyhow::Result<()> {
         // TODO: Implement this if we need it. Currently don't have a need.
+        todo!()
+    }
+
+    fn verify_replica_update(&self, _replica: &ReplicaUpdateInfo) -> Result<(), anyhow::Error> {
+        // TODO: Implement this if we need it. Currently don't have a need.
+        todo!()
+    }
+
+    fn on_submit_verify_seal(&self) {
         todo!()
     }
 }

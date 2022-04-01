@@ -321,10 +321,6 @@ where
         fvm::network::total_fil_circ_supply()
     }
 
-    fn charge_gas(&mut self, name: &'static str, compute: i64) {
-        fvm::gas::charge(name, compute as u64)
-    }
-
     fn base_fee(&self) -> TokenAmount {
         fvm::network::base_fee()
     }
@@ -389,6 +385,17 @@ where
             Ok(true) => Ok(()),
             Ok(false) | Err(_) => Err(Error::msg("invalid aggregate")),
         }
+    }
+
+    fn verify_replica_update(&self, replica: &ReplicaUpdateInfo) -> Result<(), Error> {
+        match fvm::crypto::verify_replica_update(replica) {
+            Ok(true) => Ok(()),
+            Ok(false) | Err(_) => Err(Error::msg("invalid replica")),
+        }
+    }
+
+    fn on_submit_verify_seal(&self) {
+        fvm::gas::on_submit_verify_seal()
     }
 }
 
