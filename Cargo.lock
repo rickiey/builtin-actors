@@ -280,6 +280,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1db59621ec70f09c5e9b597b220c7a2b43611f4710dc03ceb8748637775692c"
 
 [[package]]
+name = "cbor4ii"
+version = "0.2.8"
+source = "git+https://github.com/vmx/cbor4ii?branch=dag-cbor#25a3def8b77bd1f85789fa8d02235196ec532e1d"
+dependencies = [
+ "cid",
+ "serde",
+]
+
+[[package]]
 name = "cc"
 version = "1.0.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -963,8 +972,7 @@ dependencies = [
 [[package]]
 name = "fvm_ipld_blockstore"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1985eae58ec2fbf54535ce115c72a2141459fb7fb4ff7379e17bffae0e302578"
+source = "git+https://github.com/filecoin-project/fvm?branch=cbor4ii#ff7f4bdef982737f34299ff2b9776b042719161c"
 dependencies = [
  "anyhow",
  "cid",
@@ -987,15 +995,14 @@ dependencies = [
 [[package]]
 name = "fvm_ipld_encoding"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43bd635987aac46a753ec81767713af35cb50f182c7cc49d3a429643ede0e709"
+source = "git+https://github.com/filecoin-project/fvm?branch=cbor4ii#ff7f4bdef982737f34299ff2b9776b042719161c"
 dependencies = [
  "anyhow",
+ "cbor4ii",
  "cid",
  "cs_serde_bytes",
  "fvm_ipld_blockstore",
  "serde",
- "serde_ipld_dagcbor",
  "serde_repr",
  "serde_tuple",
  "thiserror",
