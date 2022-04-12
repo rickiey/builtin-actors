@@ -1,17 +1,17 @@
 // Copyright 2019-2022 ChainSafe Systems
 // SPDX-License-Identifier: Apache-2.0, MIT
 use cid::{multihash, Cid};
+use fil_actors_runtime::ActorContext;
 use fvm_ipld_blockstore::Blockstore;
 use fvm_ipld_encoding::tuple::*;
 use fvm_ipld_encoding::CborStore;
 use fvm_ipld_encoding::{Cbor, RawBytes};
-use fvm_shared::error::ExitCode;
 use fvm_shared::{MethodNum, METHOD_CONSTRUCTOR};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 
 use fil_actors_runtime::runtime::{ActorCode, Runtime};
-use fil_actors_runtime::{actor_error, ActorDowncast, ActorError, SYSTEM_ACTOR_ADDR};
+use fil_actors_runtime::{actor_error, ActorError, SYSTEM_ACTOR_ADDR};
 
 #[cfg(feature = "fil-actor")]
 fil_actors_runtime::wasm_trampoline!(Actor);
@@ -60,9 +60,8 @@ impl Actor {
         let c = rt
             .store()
             .put_cbor(&Vec::<(String, Cid)>::new(), multihash::Code::Blake2b256)
-            .map_err(|e| {
-                e.downcast_default(ExitCode::USR_ILLEGAL_STATE, "failed to construct state")
-            })?;
+            .map_err(Into::into)
+            .context("failed to construct state")?;
 
         rt.create(&State { builtin_actors: c })?;
         Ok(())
