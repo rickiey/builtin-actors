@@ -39,7 +39,15 @@ members = [
      "test_vm",
 ]
 
-#[patch.crates-io]
+[patch.crates-io]
+fvm_sdk = { git = "https://github.com/filecoin-project/ref-fvm", branch = "experimental/fvm-m2" }
+fvm_shared = { git = "https://github.com/filecoin-project/ref-fvm", branch = "experimental/fvm-m2" }
+fvm_ipld_hamt = { git = "https://github.com/filecoin-project/ref-fvm", branch = "experimental/fvm-m2" }
+fvm_ipld_amt = { git = "https://github.com/filecoin-project/ref-fvm", branch = "experimental/fvm-m2" }
+fvm_ipld_bitfield = { git = "https://github.com/filecoin-project/ref-fvm", branch = "experimental/fvm-m2" }
+fvm_ipld_encoding = { git = "https://github.com/filecoin-project/ref-fvm", branch = "experimental/fvm-m2" }
+fvm_ipld_blockstore = { git = "https://github.com/filecoin-project/ref-fvm", branch = "experimental/fvm-m2" }
+
 #fvm_shared = { git = "https://github.com/filecoin-project/ref-fvm" }
 #fvm_sdk = { git = "https://github.com/filecoin-project/ref-fvm" }
 #fvm_ipld_hamt = { git = "https://github.com/filecoin-project/ref-fvm" }
