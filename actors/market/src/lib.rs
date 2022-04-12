@@ -981,8 +981,7 @@ where
                 illegal_argument,
                 "deal id {} present multiple times",
                 deal_id
-            )
-            .into());
+            ));
         }
         let proposal = proposals
             .get(*deal_id)?
