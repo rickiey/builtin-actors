@@ -422,6 +422,11 @@ where
             Ok(false) | Err(_) => Err(Error::msg("invalid replica")),
         }
     }
+
+    fn deploy_actor(&self, _code_cid: &Cid) -> Result<(), Error> {
+        // TODO implementme
+        unimplemented!();
+    }
 }
 
 impl<B> RuntimePolicy for FvmRuntime<B>
