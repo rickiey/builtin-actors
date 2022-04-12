@@ -1117,7 +1117,7 @@ impl Syscalls for MockRuntime {
         exp.result
     }
 
-    fn deploy_actor(&self, _code_cid: &Cid) -> anyhow::Result<(), anyhow::Error> {
+    fn install_actor(&self, _code_cid: &Cid) -> anyhow::Result<(), anyhow::Error> {
         Ok(())
     }
 }
