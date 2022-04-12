@@ -60,7 +60,6 @@ impl Actor {
         let c = rt
             .store()
             .put_cbor(&Vec::<(String, Cid)>::new(), multihash::Code::Blake2b256)
-            .map_err(Into::into)
             .context("failed to construct state")?;
 
         rt.create(&State { builtin_actors: c })?;
