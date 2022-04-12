@@ -1279,7 +1279,6 @@ where
     let arr = Array::<T, _>::load(c, &rt.store).unwrap();
     arr.for_each(|_, v: &T| {
         result.push(v.clone());
-        Ok(())
     })
     .unwrap();
     result
