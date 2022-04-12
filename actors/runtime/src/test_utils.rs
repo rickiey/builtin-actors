@@ -1120,7 +1120,6 @@ impl Syscalls for MockRuntime {
     fn deploy_actor(&self, _code_cid: &Cid) -> anyhow::Result<(), anyhow::Error> {
         Ok(())
     }
-
 }
 
 impl RuntimePolicy for MockRuntime {
