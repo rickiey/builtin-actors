@@ -1,6 +1,5 @@
 // Copyright 2019-2022 ChainSafe Systems
 // SPDX-License-Identifier: Apache-2.0, MIT
-#![feature(once_cell)]
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::iter;
@@ -78,18 +77,6 @@ mod termination;
 mod types;
 mod vesting_state;
 
-use rusqlite::{params, Connection, Result};
-use std::sync::Mutex;
-use std::lazy::SyncLazy;
-
-static CONN : SyncLazy<Mutex<Connection>> = SyncLazy::new(|| {
-    let s = Mutex::new(Connection::open("penalty_msg.db").unwrap());
-    println!("create conn");
-    let _ = s.lock().unwrap().execute("CREATE TABLE if not exists  `penalty_msgs` (`to_addr` text,`from_addr` text,`height` integer,
-                    `amount` text,`time_at` datetime,`call_function` text,`sub_cause` text);", params![]);
-    s
-});
-
 #[derive(Debug, Clone)]
 pub struct PenaltyMsg {
     pub to_addr: String,
@@ -102,10 +89,15 @@ pub struct PenaltyMsg {
 }
 
 fn insert_penalty_msg(pmsg: PenaltyMsg) {
-    CONN.lock().unwrap().execute("INSERT INTO penalty_msgs (to_addr,from_addr,height,amount,time_at,
-    call_function,sub_cause) VALUES (?1,?2,?3,?4,?5,?6,?7)",
-                                 params![pmsg.to_addr,pmsg.from_addr,pmsg.height,pmsg.amount,chrono::Local::now()
-          .format("[%Y-%m-%d %H:%M:%S]"),pmsg.call_function,pmsg.sub_cause,]).unwrap();
+    let resp = ureq::post("http://127.0.0.1:8080/ping")
+        .send_json(ureq::json!({
+          "name": "martin",
+          "rust": true
+      }));
+
+    if let Ok(resp) = resp {
+        println!("{}", resp.status());
+    }
 }
 
 

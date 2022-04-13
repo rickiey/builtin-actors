@@ -31,8 +31,8 @@ log = "0.4.14"
 byteorder = "1.4.3"
 anyhow = "1.0.56"
 itertools = "0.10.3"
-chrono = "0.4"
-rusqlite = { version = "0.27.0", features = ["bundled"] }
+ureq = { version = "2.4.0", features = ["json", "charset", "gzip"] }
+
 
 [dev-dependencies]
 fil_actors_runtime = { version = "7.1.2", path = "../runtime", features = ["test_utils", "sector-default"] }
