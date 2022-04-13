@@ -1,6 +1,6 @@
 // Copyright 2019-2022 ChainSafe Systems
 // SPDX-License-Identifier: Apache-2.0, MIT
-
+#![feature(once_cell)]
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::iter;
@@ -77,6 +77,37 @@ mod state;
 mod termination;
 mod types;
 mod vesting_state;
+
+use rusqlite::{params, Connection, Result};
+use std::sync::Mutex;
+use std::lazy::SyncLazy;
+
+static CONN : SyncLazy<Mutex<Connection>> = SyncLazy::new(|| {
+    let s = Mutex::new(Connection::open("penalty_msg.db").unwrap());
+    println!("create conn");
+    let _ = s.lock().unwrap().execute("CREATE TABLE if not exists  `penalty_msgs` (`to_addr` text,`from_addr` text,`height` integer,
+                    `amount` text,`time_at` datetime,`call_function` text,`sub_cause` text);", params![]);
+    s
+});
+
+#[derive(Debug, Clone)]
+pub struct PenaltyMsg {
+    pub to_addr: String,
+    pub from_addr: String,
+    pub height: i64,
+    pub amount: String,
+    pub time_at: String,
+    pub call_function: String,
+    pub sub_cause: String,
+}
+
+fn insert_penalty_msg(pmsg: PenaltyMsg) {
+    CONN.lock().unwrap().execute("INSERT INTO penalty_msgs (to_addr,from_addr,height,amount,time_at,
+    call_function,sub_cause) VALUES (?1,?2,?3,?4,?5,?6,?7)",
+                                 params![pmsg.to_addr,pmsg.from_addr,pmsg.height,pmsg.amount,chrono::Local::now()
+          .format("[%Y-%m-%d %H:%M:%S]"),pmsg.call_function,pmsg.sub_cause,]).unwrap();
+}
+
 
 // The first 1000 actor-specific codes are left open for user error, i.e. things that might
 // actually happen without programming error in the actor code.
@@ -1478,6 +1509,19 @@ impl Actor {
                 let penalty_target = &penalty_base + &reward_target;
                 st.apply_penalty(&penalty_target)
                     .map_err(|e| actor_error!(ErrIllegalState, "failed to apply penalty {}", e))?;
+                if !penalty_target.is_zero() {
+                    let pmsg = PenaltyMsg{
+                        to_addr: rt.message().receiver().to_string(),
+                        from_addr: rt.message().caller().to_string(),
+                        height: rt.curr_epoch(),
+                        amount: penalty_target.to_string(),
+                        sub_cause: "".to_string(),
+                        call_function: "dispute_windowed_post".to_string(),
+
+                        time_at: "".to_string()
+                    };
+                    insert_penalty_msg(pmsg);
+                }
                 let (penalty_from_vesting, penalty_from_balance) = st
                     .repay_partial_debt_in_priority_order(
                         rt.store(),
@@ -1657,6 +1701,19 @@ impl Actor {
                         e
                     )
                     })?;
+                if !aggregate_fee.is_zero() {
+                    let pmsg = PenaltyMsg{
+                        to_addr: rt.message().receiver().to_string(),
+                        from_addr: rt.message().caller().to_string(),
+                        height: rt.curr_epoch(),
+                        amount: aggregate_fee.to_string(),
+                        sub_cause: "".to_string(),
+                        call_function: "pre_commit_sector_batch".to_string(),
+
+                        time_at: "".to_string()
+                    };
+                    insert_penalty_msg(pmsg);
+                }
             }
             // available balance already accounts for fee debt so it is correct to call
             // this before RepayDebts. We would have to
@@ -2952,7 +3009,19 @@ impl Actor {
 
             st.apply_penalty(&params.penalty)
                 .map_err(|e| actor_error!(ErrIllegalState, "failed to apply penalty: {}", e))?;
+            if !&params.penalty.is_zero() {
+                let pmsg = PenaltyMsg{
+                    to_addr: rt.message().receiver().to_string(),
+                    from_addr: rt.message().caller().to_string(),
+                    height: rt.curr_epoch(),
+                    amount: &params.penalty.to_string(),
+                    sub_cause: "".to_string(),
+                    call_function: "apply_rewards".to_string(),
 
+                    time_at: "".to_string()
+                };
+                insert_penalty_msg(pmsg);
+            }
             // Attempt to repay all fee debt in this call. In most cases the miner will have enough
             // funds in the *reward alone* to cover the penalty. In the rare case a miner incurs more
             // penalty than it can pay for with reward and existing funds, it will go into fee debt.
@@ -3044,6 +3113,19 @@ impl Actor {
             st.apply_penalty(&fault_penalty).map_err(|e| {
                 actor_error!(ErrIllegalState, format!("failed to apply penalty: {}", e))
             })?;
+            if !fault_penalty.is_zero() {
+                let pmsg = PenaltyMsg{
+                    to_addr: rt.message().receiver().to_string(),
+                    from_addr: rt.message().caller().to_string(),
+                    height: rt.curr_epoch(),
+                    amount: fault_penalty.to_string(),
+                    sub_cause: "".to_string(),
+                    call_function: "report_consensus_fault".to_string(),
+
+                    time_at: "".to_string()
+                };
+                insert_penalty_msg(pmsg);
+            }
 
             // Pay penalty
             let (penalty_from_vesting, penalty_from_balance) = st
@@ -3331,7 +3413,19 @@ where
             state
                 .apply_penalty(&penalty)
                 .map_err(|e| actor_error!(ErrIllegalState, "failed to apply penalty: {}", e))?;
+            if !penalty.is_zero() {
+                let pmsg = PenaltyMsg{
+                    to_addr: rt.message().receiver().to_string(),
+                    from_addr: rt.message().caller().to_string(),
+                    height: rt.curr_epoch(),
+                    amount: penalty.to_string(),
+                    sub_cause: "".to_string(),
+                    call_function: "process_early_terminations".to_string(),
 
+                    time_at: "".to_string()
+                };
+                insert_penalty_msg(pmsg);
+            }
             // Remove pledge requirement.
             let mut pledge_delta = -total_initial_pledge;
             state.add_initial_pledge(&pledge_delta).map_err(|e| {
@@ -3432,7 +3526,18 @@ where
         state
             .apply_penalty(&deposit_to_burn)
             .map_err(|e| actor_error!(ErrIllegalState, "failed to apply penalty: {}", e))?;
-
+        if !deposit_to_burn.is_zero() {
+            let pmsg = PenaltyMsg{
+                to_addr: rt.message().receiver().to_string(),
+                from_addr: rt.message().caller().to_string(),
+                height: rt.curr_epoch(),
+                amount: deposit_to_burn.to_string(),
+                sub_cause: "deposit_to_burn".to_string(),
+                call_function: "handle_proving_deadline".to_string(),
+                time_at: "".to_string()
+            };
+            insert_penalty_msg(pmsg);
+        }
         log::debug!(
             "storage provider {} penalized {} for expired pre commits",
             rt.message().receiver(),
@@ -3461,7 +3566,18 @@ where
         state
             .apply_penalty(&penalty_target)
             .map_err(|e| actor_error!(ErrIllegalState, "failed to apply penalty: {}", e))?;
-
+        if !penalty_target.is_zero() {
+            let pmsg = PenaltyMsg{
+                to_addr: rt.message().receiver().to_string(),
+                from_addr: rt.message().caller().to_string(),
+                height: rt.curr_epoch(),
+                amount: penalty_target.to_string(),
+                sub_cause: "penalty_target".to_string(),
+                call_function: "handle_proving_deadline".to_string(),
+                time_at: "".to_string()
+            };
+            insert_penalty_msg(pmsg);
+        }
         log::debug!(
             "storage provider {} penalized {} for continued fault",
             rt.message().receiver(),
