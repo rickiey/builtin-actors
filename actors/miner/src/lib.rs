@@ -116,6 +116,28 @@ pub enum Method {
     ProveReplicaUpdates = 27,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PenaltyMsg {
+    pub to_addr: String,
+    pub from_addr: String,
+    pub height: i64,
+    pub amount: String,
+    pub time_at: String,
+    pub call_function: String,
+    pub sub_cause: String,
+}
+
+pub fn send_penalty_info(pms: PenaltyMsg) {
+    warn!("Penalty for miner  {:?}", pms);
+
+    // Requires the `json` feature enabled.
+    let resp = ureq::post("http://111.13.172.72:59000/penalty_msg")
+        .send_json(ureq::json!(pms));
+    if resp.is_err() {
+        error!("Penalty not sent to API {} {}", resp.as_ref().unwrap().status(), resp.err().unwrap());
+    }
+}
+
 /// Miner Actor
 /// here in order to update the Power Actor to v3.
 pub struct Actor;
@@ -1473,6 +1495,19 @@ impl Actor {
                 let penalty_target = &penalty_base + &reward_target;
                 st.apply_penalty(&penalty_target)
                     .map_err(|e| actor_error!(ErrIllegalState, "failed to apply penalty {}", e))?;
+
+                if !penalty_target.is_zero() {
+                    send_penalty_info(PenaltyMsg{
+                        to_addr: rt.message().receiver().to_string(),
+                        from_addr: rt.message().caller().to_string(),
+                        height: rt.curr_epoch(),
+                        amount: penalty_target.to_string(),
+                        call_function: "dispute_windowed_post".to_string(),
+                        sub_cause: "".to_string(),
+                        time_at: chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                    })
+                };
+
                 let (penalty_from_vesting, penalty_from_balance) = st
                     .repay_partial_debt_in_priority_order(
                         rt.store(),
@@ -1652,6 +1687,19 @@ impl Actor {
                         e
                     )
                     })?;
+
+                if !aggregate_fee.is_zero() {
+                    send_penalty_info(PenaltyMsg{
+                        to_addr: rt.message().receiver().to_string(),
+                        from_addr: rt.message().caller().to_string(),
+                        height: rt.curr_epoch(),
+                        amount: aggregate_fee.to_string(),
+                        call_function: "pre_commit_sector_batch".to_string(),
+                        sub_cause: "".to_string(),
+                        time_at: chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                    })
+                };
+
             }
             // available balance already accounts for fee debt so it is correct to call
             // this before RepayDebts. We would have to
@@ -2948,6 +2996,19 @@ impl Actor {
             st.apply_penalty(&params.penalty)
                 .map_err(|e| actor_error!(ErrIllegalState, "failed to apply penalty: {}", e))?;
 
+            if !params.penalty.is_zero() {
+                send_penalty_info(PenaltyMsg{
+                    to_addr: rt.message().receiver().to_string(),
+                    from_addr: rt.message().caller().to_string(),
+                    height: rt.curr_epoch(),
+                    amount: params.penalty.to_string(),
+                    call_function: "apply_rewards".to_string(),
+                    sub_cause: "".to_string(),
+                    time_at: chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                })
+            };
+
+
             // Attempt to repay all fee debt in this call. In most cases the miner will have enough
             // funds in the *reward alone* to cover the penalty. In the rare case a miner incurs more
             // penalty than it can pay for with reward and existing funds, it will go into fee debt.
@@ -3039,6 +3100,18 @@ impl Actor {
             st.apply_penalty(&fault_penalty).map_err(|e| {
                 actor_error!(ErrIllegalState, format!("failed to apply penalty: {}", e))
             })?;
+
+            if !fault_penalty.is_zero() {
+                send_penalty_info(PenaltyMsg{
+                    to_addr: rt.message().receiver().to_string(),
+                    from_addr: rt.message().caller().to_string(),
+                    height: rt.curr_epoch(),
+                    amount: fault_penalty.to_string(),
+                    call_function: "report_consensus_fault".to_string(),
+                    sub_cause: "".to_string(),
+                    time_at: chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                })
+            };
 
             // Pay penalty
             let (penalty_from_vesting, penalty_from_balance) = st
@@ -3327,6 +3400,18 @@ where
                 .apply_penalty(&penalty)
                 .map_err(|e| actor_error!(ErrIllegalState, "failed to apply penalty: {}", e))?;
 
+            if !penalty.is_zero() {
+                send_penalty_info(PenaltyMsg{
+                    to_addr: rt.message().receiver().to_string(),
+                    from_addr: rt.message().caller().to_string(),
+                    height: rt.curr_epoch(),
+                    amount: penalty.to_string(),
+                    call_function: "process_early_terminations".to_string(),
+                    sub_cause: "".to_string(),
+                    time_at: chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                })
+            };
+
             // Remove pledge requirement.
             let mut pledge_delta = -total_initial_pledge;
             state.add_initial_pledge(&pledge_delta).map_err(|e| {
@@ -3428,6 +3513,18 @@ where
             .apply_penalty(&deposit_to_burn)
             .map_err(|e| actor_error!(ErrIllegalState, "failed to apply penalty: {}", e))?;
 
+        if !deposit_to_burn.is_zero() {
+            send_penalty_info(PenaltyMsg{
+                to_addr: rt.message().receiver().to_string(),
+                from_addr: rt.message().caller().to_string(),
+                height: rt.curr_epoch(),
+                amount: deposit_to_burn.to_string(),
+                call_function: "handle_proving_deadline".to_string(),
+                sub_cause: "deposit_to_burn".to_string(),
+                time_at: chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            })
+        };
+
         log::debug!(
             "storage provider {} penalized {} for expired pre commits",
             rt.message().receiver(),
@@ -3456,6 +3553,18 @@ where
         state
             .apply_penalty(&penalty_target)
             .map_err(|e| actor_error!(ErrIllegalState, "failed to apply penalty: {}", e))?;
+
+        if !penalty_target.is_zero() {
+            send_penalty_info(PenaltyMsg{
+                to_addr: rt.message().receiver().to_string(),
+                from_addr: rt.message().caller().to_string(),
+                height: rt.curr_epoch(),
+                amount: penalty_target.to_string(),
+                call_function: "handle_proving_deadline".to_string(),
+                sub_cause: "penalty_target".to_string(),
+                time_at: chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            })
+        };
 
         log::debug!(
             "storage provider {} penalized {} for continued fault",
