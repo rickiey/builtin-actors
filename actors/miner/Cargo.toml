@@ -28,8 +28,8 @@ log = "0.4.14"
 byteorder = "1.4.3"
 anyhow = "1.0.56"
 itertools = "0.10.3"
-ureq = { version = "2.4.0", features = ["json"] }
 chrono = "0.4"
+reqwest = { version="0.11.8", features = ["blocking", "json"]}
 [dev-dependencies]
 fil_actors_runtime = { version = "7.1.1", path = "../runtime", features = ["test_utils", "sector-default"] }
 fil_actor_account = { version = "7.1.1", path = "../account" }

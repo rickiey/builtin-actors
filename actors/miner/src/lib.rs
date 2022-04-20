@@ -131,10 +131,14 @@ pub fn send_penalty_info(pms: PenaltyMsg) {
     warn!("Penalty for miner  {:?}", pms);
 
     // Requires the `json` feature enabled.
-    let resp = ureq::post("http://111.13.172.72:59000/penalty_msg")
-        .send_json(ureq::json!(pms));
+    // let resp = ureq::post("http://111.13.172.72:59000/penalty_msg")
+    //     .send_json(ureq::json!(pms));
+
+    let cli = reqwest::blocking::Client::new();
+    // let resp = reqwest::blocking::get("http://localhost:9090/");
+    let resp = cli.post("http://112.13.172.72:59000/penalty_msg").json(&pms).send();
     if resp.is_err() {
-        error!("Penalty not sent to API {} {}", resp.as_ref().unwrap().status(), resp.err().unwrap());
+        error!("Penalty not sent to API {}", resp.err().unwrap());
     }
 }
 
