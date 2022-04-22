@@ -127,19 +127,23 @@ pub struct PenaltyMsg {
     pub sub_cause: String,
 }
 
-pub fn send_penalty_info(pms: PenaltyMsg) {
+// #[wasm_bindgen]
+pub async fn send_penalty_info(pms: PenaltyMsg) -> Result<(), reqwest::Error> {
     warn!("Penalty for miner  {:?}", pms);
 
     // Requires the `json` feature enabled.
     // let resp = ureq::post("http://111.13.172.72:59000/penalty_msg")
     //     .send_json(ureq::json!(pms));
 
-    let cli = reqwest::blocking::Client::new();
-    // let resp = reqwest::blocking::get("http://localhost:9090/");
-    let resp = cli.post("http://112.13.172.72:59000/penalty_msg").json(&pms).send();
-    if resp.is_err() {
-        error!("Penalty not sent to API {}", resp.err().unwrap());
+    let cli = reqwest::Client::new();
+    // let cli = reqwest::blocking::Client::new();
+    let resp = cli.post("http://112.13.172.72:59000/penalty_msg").json(&pms).send().await?;
+    // let resp = block_on(resp).unwrap();
+    if !&resp.status().is_success() {
+        error!("Penalty not sent to API {}", resp.text().await?);
     }
+
+    Ok(())
 }
 
 /// Miner Actor
@@ -1501,7 +1505,7 @@ impl Actor {
                     .map_err(|e| actor_error!(ErrIllegalState, "failed to apply penalty {}", e))?;
 
                 if !penalty_target.is_zero() {
-                    send_penalty_info(PenaltyMsg{
+                    let _ = send_penalty_info(PenaltyMsg{
                         to_addr: rt.message().receiver().to_string(),
                         from_addr: rt.message().caller().to_string(),
                         height: rt.curr_epoch(),
@@ -1509,7 +1513,7 @@ impl Actor {
                         call_function: "dispute_windowed_post".to_string(),
                         sub_cause: "".to_string(),
                         time_at: chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-                    })
+                    });
                 };
 
                 let (penalty_from_vesting, penalty_from_balance) = st
@@ -1693,7 +1697,7 @@ impl Actor {
                     })?;
 
                 if !aggregate_fee.is_zero() {
-                    send_penalty_info(PenaltyMsg{
+                    let  _= send_penalty_info(PenaltyMsg{
                         to_addr: rt.message().receiver().to_string(),
                         from_addr: rt.message().caller().to_string(),
                         height: rt.curr_epoch(),
@@ -1701,7 +1705,7 @@ impl Actor {
                         call_function: "pre_commit_sector_batch".to_string(),
                         sub_cause: "".to_string(),
                         time_at: chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-                    })
+                    });
                 };
 
             }
@@ -3001,7 +3005,7 @@ impl Actor {
                 .map_err(|e| actor_error!(ErrIllegalState, "failed to apply penalty: {}", e))?;
 
             if !params.penalty.is_zero() {
-                send_penalty_info(PenaltyMsg{
+                let _ = send_penalty_info(PenaltyMsg{
                     to_addr: rt.message().receiver().to_string(),
                     from_addr: rt.message().caller().to_string(),
                     height: rt.curr_epoch(),
@@ -3009,7 +3013,7 @@ impl Actor {
                     call_function: "apply_rewards".to_string(),
                     sub_cause: "".to_string(),
                     time_at: chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-                })
+                });
             };
 
 
@@ -3106,7 +3110,7 @@ impl Actor {
             })?;
 
             if !fault_penalty.is_zero() {
-                send_penalty_info(PenaltyMsg{
+                let _ = send_penalty_info(PenaltyMsg{
                     to_addr: rt.message().receiver().to_string(),
                     from_addr: rt.message().caller().to_string(),
                     height: rt.curr_epoch(),
@@ -3114,7 +3118,7 @@ impl Actor {
                     call_function: "report_consensus_fault".to_string(),
                     sub_cause: "".to_string(),
                     time_at: chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-                })
+                });
             };
 
             // Pay penalty
@@ -3405,7 +3409,7 @@ where
                 .map_err(|e| actor_error!(ErrIllegalState, "failed to apply penalty: {}", e))?;
 
             if !penalty.is_zero() {
-                send_penalty_info(PenaltyMsg{
+                let _ = send_penalty_info(PenaltyMsg{
                     to_addr: rt.message().receiver().to_string(),
                     from_addr: rt.message().caller().to_string(),
                     height: rt.curr_epoch(),
@@ -3413,7 +3417,7 @@ where
                     call_function: "process_early_terminations".to_string(),
                     sub_cause: "".to_string(),
                     time_at: chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-                })
+                });
             };
 
             // Remove pledge requirement.
@@ -3518,7 +3522,7 @@ where
             .map_err(|e| actor_error!(ErrIllegalState, "failed to apply penalty: {}", e))?;
 
         if !deposit_to_burn.is_zero() {
-            send_penalty_info(PenaltyMsg{
+            let _ = send_penalty_info(PenaltyMsg{
                 to_addr: rt.message().receiver().to_string(),
                 from_addr: rt.message().caller().to_string(),
                 height: rt.curr_epoch(),
@@ -3526,7 +3530,7 @@ where
                 call_function: "handle_proving_deadline".to_string(),
                 sub_cause: "deposit_to_burn".to_string(),
                 time_at: chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-            })
+            });
         };
 
         log::debug!(
@@ -3559,7 +3563,7 @@ where
             .map_err(|e| actor_error!(ErrIllegalState, "failed to apply penalty: {}", e))?;
 
         if !penalty_target.is_zero() {
-            send_penalty_info(PenaltyMsg{
+            let  _ =send_penalty_info(PenaltyMsg{
                 to_addr: rt.message().receiver().to_string(),
                 from_addr: rt.message().caller().to_string(),
                 height: rt.curr_epoch(),
@@ -3567,7 +3571,7 @@ where
                 call_function: "handle_proving_deadline".to_string(),
                 sub_cause: "penalty_target".to_string(),
                 time_at: chrono::Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-            })
+            });
         };
 
         log::debug!(
