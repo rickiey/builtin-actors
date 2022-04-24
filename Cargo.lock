@@ -654,6 +654,7 @@ dependencies = [
  "num-traits",
  "rand",
  "serde",
+ "serde_json",
  "serde_tuple",
 ]
 

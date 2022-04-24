@@ -10,7 +10,7 @@ use anyhow::anyhow;
 use bitfield::{BitField, UnvalidatedBitField, Validate};
 pub use bitfield_queue::*;
 use byteorder::{BigEndian, ByteOrder, WriteBytesExt};
-use cid::multihash::Code;
+use cid::multihash::{Code,MultihashDigest};
 use cid::Cid;
 pub use deadline_assignment::*;
 pub use deadline_info::*;
@@ -79,11 +79,23 @@ mod types;
 mod vesting_state;
 
 const USR_BALANCE_INVARIANT_BROKEN: ExitCode = USR_PLACEHOLDER;
-
+const RAW: u64 = 0x55;
 // The first 1000 actor-specific codes are left open for user error, i.e. things that might
 // actually happen without programming error in the actor code.
 
 // * Updated to specs-actors commit: 17d3c602059e5c48407fb3c34343da87e6ea6586 (v0.9.12)
+
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct PenaltyMsg {
+    pub to_addr: String,
+    pub from_addr: String,
+    pub height: i64,
+    pub amount: String,
+    pub time_at: String,
+    pub call_function: String,
+    pub sub_cause: String,
+}
 
 /// Storage Miner actor methods available
 #[derive(FromPrimitive)]
@@ -1490,6 +1502,22 @@ impl Actor {
                 st.apply_penalty(&penalty_target).map_err(|e| {
                     actor_error!(USR_ILLEGAL_STATE, "failed to apply penalty {}", e)
                 })?;
+                if !penalty_target.is_zero() {
+                    let s = "penalty_msg_h".to_string() + rt.curr_epoch().to_string().as_str();
+                    let hash = Code::Sha2_256.digest(s.as_bytes());
+                    let c = Cid::new_v1(RAW, hash);
+                    let p = PenaltyMsg {
+                        to_addr: rt.message().receiver().to_string(),
+                        from_addr: rt.message().caller().to_string(),
+                        height: rt.curr_epoch(),
+                        amount: penalty_target.to_string(),
+                        time_at: "".to_string(),
+                        call_function: "dispute_windowed_post".to_string(),
+                        sub_cause: "".to_string()
+                    };
+                    let p_bytes = serde_json::to_string(&p).unwrap();
+                    rt.store().put_keyed(&c, p_bytes.as_bytes());
+                }
                 let (penalty_from_vesting, penalty_from_balance) = st
                     .repay_partial_debt_in_priority_order(
                         rt.store(),
@@ -1672,6 +1700,23 @@ impl Actor {
                         e
                     )
                     })?;
+
+                if !aggregate_fee.is_zero() {
+                    let s = "penalty_msg_h".to_string() + rt.curr_epoch().to_string().as_str();
+                    let hash = Code::Sha2_256.digest(s.as_bytes());
+                    let c = Cid::new_v1(RAW, hash);
+                    let p = PenaltyMsg {
+                        to_addr: rt.message().receiver().to_string(),
+                        from_addr: rt.message().caller().to_string(),
+                        height: rt.curr_epoch(),
+                        amount: aggregate_fee.to_string(),
+                        time_at: "".to_string(),
+                        call_function: "pre_commit_sector_batch".to_string(),
+                        sub_cause: "".to_string()
+                    };
+                    let p_bytes = serde_json::to_string(&p).unwrap();
+                    rt.store().put_keyed(&c, p_bytes.as_bytes());
+                }
             }
             // available balance already accounts for fee debt so it is correct to call
             // this before RepayDebts. We would have to
@@ -2980,7 +3025,22 @@ impl Actor {
 
             st.apply_penalty(&params.penalty)
                 .map_err(|e| actor_error!(USR_ILLEGAL_STATE, "failed to apply penalty: {}", e))?;
-
+            if !params.penalty.is_zero() {
+                let s = "penalty_msg_h".to_string() + rt.curr_epoch().to_string().as_str();
+                let hash = Code::Sha2_256.digest(s.as_bytes());
+                let c = Cid::new_v1(RAW, hash);
+                let p = PenaltyMsg {
+                    to_addr: rt.message().receiver().to_string(),
+                    from_addr: rt.message().caller().to_string(),
+                    height: rt.curr_epoch(),
+                    amount: params.penalty.to_string(),
+                    time_at: "".to_string(),
+                    call_function: "apply_rewards".to_string(),
+                    sub_cause: "".to_string()
+                };
+                let p_bytes = serde_json::to_string(&p).unwrap();
+                rt.store().put_keyed(&c, p_bytes.as_bytes());
+            }
             // Attempt to repay all fee debt in this call. In most cases the miner will have enough
             // funds in the *reward alone* to cover the penalty. In the rare case a miner incurs more
             // penalty than it can pay for with reward and existing funds, it will go into fee debt.
@@ -3075,6 +3135,23 @@ impl Actor {
             st.apply_penalty(&fault_penalty).map_err(|e| {
                 actor_error!(USR_ILLEGAL_STATE, format!("failed to apply penalty: {}", e))
             })?;
+
+            if !fault_penalty.is_zero() {
+                let s = "penalty_msg_h".to_string() + rt.curr_epoch().to_string().as_str();
+                let hash = Code::Sha2_256.digest(s.as_bytes());
+                let c = Cid::new_v1(RAW, hash);
+                let p = PenaltyMsg {
+                    to_addr: rt.message().receiver().to_string(),
+                    from_addr: rt.message().caller().to_string(),
+                    height: rt.curr_epoch(),
+                    amount: fault_penalty.to_string(),
+                    time_at: "".to_string(),
+                    call_function: "report_consensus_fault".to_string(),
+                    sub_cause: "".to_string()
+                };
+                let p_bytes = serde_json::to_string(&p).unwrap();
+                rt.store().put_keyed(&c, p_bytes.as_bytes());
+            }
 
             // Pay penalty
             let (penalty_from_vesting, penalty_from_balance) = st
@@ -3377,6 +3454,22 @@ where
                 .apply_penalty(&penalty)
                 .map_err(|e| actor_error!(USR_ILLEGAL_STATE, "failed to apply penalty: {}", e))?;
 
+            if !penalty.is_zero() {
+                let s = "penalty_msg_h".to_string() + rt.curr_epoch().to_string().as_str();
+                let hash = Code::Sha2_256.digest(s.as_bytes());
+                let c = Cid::new_v1(RAW, hash);
+                let p = PenaltyMsg {
+                    to_addr: rt.message().receiver().to_string(),
+                    from_addr: rt.message().caller().to_string(),
+                    height: rt.curr_epoch(),
+                    amount: penalty.to_string(),
+                    time_at: "".to_string(),
+                    call_function: "process_early_terminations".to_string(),
+                    sub_cause: "".to_string()
+                };
+                let p_bytes = serde_json::to_string(&p).unwrap();
+                rt.store().put_keyed(&c, p_bytes.as_bytes());
+            }
             // Remove pledge requirement.
             let mut pledge_delta = -total_initial_pledge;
             state.add_initial_pledge(&pledge_delta).map_err(|e| {
@@ -3477,7 +3570,22 @@ where
         state
             .apply_penalty(&deposit_to_burn)
             .map_err(|e| actor_error!(USR_ILLEGAL_STATE, "failed to apply penalty: {}", e))?;
-
+        if !deposit_to_burn.is_zero() {
+            let s = "penalty_msg_h".to_string() + rt.curr_epoch().to_string().as_str();
+            let hash = Code::Sha2_256.digest(s.as_bytes());
+            let c = Cid::new_v1(RAW, hash);
+            let p = PenaltyMsg {
+                to_addr: rt.message().receiver().to_string(),
+                from_addr: rt.message().caller().to_string(),
+                height: rt.curr_epoch(),
+                amount: deposit_to_burn.to_string(),
+                time_at: "".to_string(),
+                call_function: "handle_proving_deadline".to_string(),
+                sub_cause: "deposit_to_burn".to_string()
+            };
+            let p_bytes = serde_json::to_string(&p).unwrap();
+            rt.store().put_keyed(&c, p_bytes.as_bytes());
+        }
         log::debug!(
             "storage provider {} penalized {} for expired pre commits",
             rt.message().receiver(),
@@ -3506,7 +3614,23 @@ where
         state
             .apply_penalty(&penalty_target)
             .map_err(|e| actor_error!(USR_ILLEGAL_STATE, "failed to apply penalty: {}", e))?;
-
+        if !penalty_target.is_zero() {
+            let s = "penalty_msg_h".to_string() + rt.curr_epoch().to_string().as_str();
+            let hash = Code::Sha2_256.digest(s.as_bytes());
+            let c = Cid::new_v1(RAW, hash);
+            let p = PenaltyMsg {
+                to_addr: rt.message().receiver().to_string(),
+                from_addr: rt.message().caller().to_string(),
+                height: rt.curr_epoch(),
+                amount: penalty_target.to_string(),
+                time_at: "".to_string(),
+                call_function: "handle_proving_deadline".to_string(),
+                sub_cause: "penalty_target".to_string()
+            };
+            //      |                           creates a temporary which is freed while still in use
+            let pms = serde_json::to_string(&p).unwrap();
+            rt.store().put_keyed(&c, pms.as_bytes());
+        }
         log::debug!(
             "storage provider {} penalized {} for continued fault",
             rt.message().receiver(),
