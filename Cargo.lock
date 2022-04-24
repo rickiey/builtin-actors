@@ -3,7 +3,7 @@
 version = 3
 
 [[package]]
-name = "actors_v7"
+name = "actors-v7"
 version = "7.2.0"
 dependencies = [
  "cid",
